@@ -1,0 +1,517 @@
+<ConfigRoot>    
+    <Settings>
+        <!-- empty taxidList means all species -->
+        <!-- Popular species:
+            Human (Homo Sapiens): 9606
+            Rat (Rattus norvegicus): 10116
+            Mouse (Mus musculus): 10090
+            Zebrafish (Danio rerio): 7955
+            Fruit Fly (Drosophila melanogaster): 7227
+            Caenorhabditis elegans (worm): 6239
+            Saccharomyces cerevisiae (baker's yeast):4932
+            Plasmodium falciparum (malaria parasite P. falciparum): 5833
+            Arabidopsis thaliana: 3702
+            Schizosaccharomyces pombe: 4896
+        -->    
+        <DefaultSpecies taxidList="9606,10090,10116,7955,7227,6239,4932,5833,3702,4896"/>
+    </Settings>
+    
+    <PPI dest="ppi.csv"/>   
+    <Interaction source="ppi.csv" typeName='BioGrid' filter_str='ds == "BioGrid"' ds="BioGrid">
+    </Interaction>
+    <Interaction source="ppi.csv" typeName='InWeb_IM' filter_str='ds == "InWeb_IM"' ds="InWeb_IM">
+    </Interaction>
+    <Interaction source="ppi.csv" typeName='OmniPath' filter_str='ds == "OmniPath"' ds="OmniPath">
+    </Interaction>
+
+    <UrlDownload ds='ncbi' source= "ftp://ftp.ncbi.nlm.nih.gov/pub/HomoloGene/current/homologene.data"  />
+    <Homologene  
+        source="homologene.data"
+        read_csv='header=None,sep=\t'
+        dest='biosystems_gene_KEGG.csv'
+        oldCols='homologene_id,tax_id,gid,gene_symbol,protein_gi,protein_accession'
+        newCols='tax_id,homologene_id,gid'>
+    </Homologene>
+    <!--id mapping: ncbi/gene2refseq.gz-->
+    <UrlDownload ds='ncbi' source= "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/gene2refseq.gz"  />
+    <CsvInMem
+        source="gene2refseq.gz" 
+        read_csv='header=None,sep=\t,comment=#,skiprows=1'
+        oldCols='tax_id,GeneID,status,RNA_nucleotide_accession_version,RNA_nucleotide_gi,protein_accession_version,protein_gi,genomic_nucleotide_accession.version,genomic_nucleotide_gi,start_position_on_the_genomic_accession,end_position_on_the_genomic_accession,orientation,assembly,mature_peptide_accession_version,mature_peptide_gi,Symbol'
+        newCols='GeneID,status,RNA_nucleotide_accession_version,protein_accession_version,genomic_nucleotide_accession.version,tax_id'
+        filter_str="GeneID not in(&quot;SUPPRESSED&quot;)"
+    >
+    </CsvInMem>
+    <IdMapping  
+        source="CsvInMem_gene2refseq" 
+        typeName='RefSeq_Proteins'
+    >
+        <Col colName='gid' sourceCol = 'GeneID'/>
+        <Col colName='source_id' sourceCol='protein_accession_version' match='([^-]*?)(\.\d|$)' required=''/>
+        <Col colName='id_status' sourceCol='status' required=''/>
+    </IdMapping>
+    <IdMapping  
+        source="CsvInMem_gene2refseq" 
+        typeName='RefSeq_RNAs'
+    >
+        <Col colName='gid' sourceCol = 'GeneID'/>
+        <Col colName='source_id' sourceCol='RNA_nucleotide_accession_version' match='([^-]*?)(\.\d|$)' required=''/>
+        <Col colName='id_status' sourceCol='status' required=''/>
+    </IdMapping>
+	
+    
+    <!--Gene History-->
+    <UrlDownload ds='ncbi' source= "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/gene_history.gz"  />
+    <CsvConvert  
+        source="gene_history.gz" 
+        dest="gene_history_gid.csv"         
+        read_csv='header=None,sep=\t,comment=#,skiprows=1'
+        oldCols='tax_id,GeneID,Discontinued_GeneID,Discontinued_Symbol,Discontinue_Date'
+        newCols='tax_id,GeneID,Discontinued_GeneID,Discontinued_Symbol,Discontinue_Date'
+        filter_str='GeneID not in(&quot;-&quot;)' 
+        required=''
+    >
+    </CsvConvert>
+    <CsvConvert  
+        source="gene_history.gz" 
+        dest="gene_history_symb.csv"         
+        read_csv='header=None,sep=\t,comment=#,skiprows=1'
+        oldCols='tax_id,GeneID,Discontinued_GeneID,Discontinued_Symbol,Discontinue_Date'
+        newCols='tax_id,GeneID,Discontinued_GeneID,Discontinued_Symbol,Discontinue_Date'
+        filter_str='GeneID not in(&quot;-&quot;) and Discontinued_Symbol not in (&quot;null&quot;)' 
+        required=''
+    >
+    </CsvConvert>
+    <IdMapping  
+        source="gene_history_gid.csv" 
+        typeName='Gene_History'
+        destFile='Gene_History_gid'
+    >
+        <Col colName='gid' sourceCol = 'GeneID'/>
+        <Col colName='source_id' sourceCol='Discontinued_GeneID' match='(.+)' required=''/>
+        <ColConst colName='id_status' value='ID'/>
+    </IdMapping>
+    
+    <IdMapping  
+        source="gene_history_symb.csv" 
+        typeName='Gene_History'
+        destFile='Gene_History_symbol'>
+        <Col colName='gid' sourceCol = 'GeneID'/>
+        <Col colName='source_id' sourceCol='Discontinued_Symbol' match='(.+)' required=''/>
+        <ColConst colName='id_status' value='SYM'/>
+    </IdMapping>
+    <!--Gene History ENDS-->    
+
+    <UrlDownload source= "ftp://ftp.ncbi.nih.gov/gene/DATA/gene_info.gz" ds='ncbi'></UrlDownload>
+    <CsvConvert  
+        source="gene_info.gz" 
+        dest='gene_info.csv'
+        read_csv='header=None,sep=\t,skiprows=1'
+        oldCols='tax_id,GeneID,Symbol,LocusTag,Synonyms,dbXrefs,chromosome,map_location,description,type_of_gene,Symbol_from_nomenclature_authority,Full_name_from_nomenclature_authority,Nomenclature_status,Other_designations,Modification_date,Feature_type'
+        newCols='tax_id,gid,Symbol,LocusTag,Synonyms,map_location,description,type_of_gene,Full_name_from_nomenclature_authority,dbXrefs'
+        filter_str='Symbol not in(&quot;NEWENTRY&quot;)'
+        >
+        <Col colName='gid' sourceCol = 'GeneID'/>
+    </CsvConvert>
+    <IdMapping source="gene_info.csv" typeName='symbol'>
+        <Col colName='source_id' sourceCol='Symbol' match='^(?!-$)(.*)' required=''/>
+    </IdMapping>
+    <IdMapping source="gene_info.csv" typeName='locus_tag'>
+        <Col colName='source_id' sourceCol='LocusTag' match='^(?!-$)(.*)' required=''/>
+    </IdMapping>
+
+    <Annotation source="gene_info.csv" typeName='Symbol'>
+        <Col colName='content' sourceCol='Symbol' match='^(?!-$)(.*)' required=''/>
+    </Annotation>
+    <Annotation source="gene_info.csv" typeName='Synonyms' >
+        <Col colName='content' sourceCol='Synonyms' match='^(?!-$)(.*)' required=''/>
+    </Annotation>
+    <Annotation source="gene_info.csv" typeName='type_of_gene' >
+        <Col colName='content' sourceCol='type_of_gene' match='^(?!-$)(.*)' required=''/>
+    </Annotation>
+    <Annotation source="gene_info.csv" typeName='gene_description' >
+        <Col colName='content' sourceCol='description' match='^(?!-$)(.*)' required=''/>
+    </Annotation>
+    
+   <!--Gene Summary-->
+   <GeneSummaryDownload source="gene_info.gz" dest="gene_summary.csv" ds="ncbi"/>
+   <MultiTypeAnnotations typeNames = 'gene_summary' source='gene_summary.csv' name="gene_summary_info"/> 
+   <!--Gene Summary ends-->
+
+    <!--KEGG-->
+    <UrlDownload source= "ftp://ftp.ncbi.nih.gov/pub/biosystems/CURRENT/bsid2info.gz" ds='ncbi_kegg'  />
+    <UrlDownload source= "ftp://ftp.ncbi.nih.gov/pub/biosystems/CURRENT/biosystems_gene.gz" ds='ncbi_kegg'  />
+    
+    <BioSystem ds="ncbi"/>
+
+    <Term source="biosystem_terms.csv" typeName='KEGG Functional Sets' filter_str='type in (&quot;functional_set&quot;)' read_csv='sep=\t'>
+        <Col colName='term_id' sourceCol = 'source_id'/>
+        <Col colName='term_source_id' sourceCol='source'/>
+        <Col colName='term_name' sourceCol='name'/>
+        <Col colName='term_type' sourceCol='type'/>
+    </Term>
+    <TermGenePair 
+        read_csv='sep=\t'
+        source='biosystem_term_gene_pair.csv'
+        typeName='KEGG Functional Sets'
+	 	filter_str='type in (&quot;functional_set&quot;)'        
+    />    
+    <Term source="biosystem_terms.csv" typeName='KEGG Pathway' filter_str='type in (&quot;pathway&quot;)' read_csv='sep=\t'>
+        <Col colName='term_id' sourceCol = 'source_id'/>
+        <Col colName='term_source_id' sourceCol='source_id'/>
+        <Col colName='term_name' sourceCol='name'/>
+        <Col colName='term_type' sourceCol='type'/>
+    </Term>
+    <TermGenePair 
+        read_csv='sep=\t'
+        source='biosystem_term_gene_pair.csv'
+        typeName='KEGG Pathway'
+	 	filter_str='type in (&quot;pathway&quot;)'        
+    />
+    <Term source="biosystem_terms.csv" typeName='KEGG Structural Complexes' filter_str='type in (&quot;structural_complex&quot;)' read_csv='sep=\t'>
+        <Col colName='term_id' sourceCol = 'source_id'/>
+        <Col colName='term_source_id' sourceCol='source_id'/>
+        <Col colName='term_name' sourceCol='name'/>
+        <Col colName='term_type' sourceCol='type'/>
+    </Term>
+    
+    <TermGenePair 
+        read_csv='sep=\t'
+        source='biosystem_term_gene_pair.csv'
+        typeName='KEGG Structural Complexes'
+	 	filter_str='type in (&quot;structural_complex&quot;)'        
+    />
+    <!--KEGG ENDS-->
+    
+    <!--MSIGDB-->
+    <MsigdbDownload ds='msigdb'/>  
+    <MsigdbTerm typeNames = 'Hallmark Gene Sets,Chemical And Genetic Perturbations,Canonical Pathways,Biocarta Gene Sets,Oncogenic Signatures,Immunologic Signatures'/>
+    <!--MSIGDB ENDS-->
+    
+	<!--GO-->
+    <GoDownload ds='go'/>
+
+	<Term source="go_term.csv" typeName='GO Biological Processes' filter_str='term_type in (&quot;BP&quot;)'> 
+		<Col colName='term_field1' sourceCol='term_type'/>
+    </Term>
+
+	<Term source="go_term.csv" typeName='GO Cellular Components' filter_str='term_type in (&quot;CC&quot;)'> 
+		<Col colName='term_field1' sourceCol='term_type'/>
+    </Term>
+
+	<Term source="go_term.csv" typeName='GO Molecular Functions' filter_str='term_type in (&quot;MF&quot;)'> 
+		<Col colName='term_field1' sourceCol='term_type'/>
+    </Term>    
+	<TermGenePair 
+		source='gene2go_9606_extended.csv'
+		typeName='GO Biological Processes'
+		read_csv = 'header=None,sep=\t'
+		oldCols='tax_id,gid,term_id,term_type,description'
+		newCols='tax_id,gid,term_id'
+	 	filter_str='term_type in (&quot;BP&quot;)'
+	/>
+	<TermGenePair 
+		source='gene2go_9606_extended.csv'
+		typeName='GO Cellular Components'
+		read_csv = 'header=None,sep=\t'
+		oldCols='tax_id,gid,term_id,term_type,description'
+		newCols='tax_id,gid,term_id'
+	 	filter_str='term_type in (&quot;CC&quot;)'
+	/>
+	<TermGenePair 
+		source='gene2go_9606_extended.csv'
+		typeName='GO Molecular Functions'
+		read_csv = 'header=None,sep=\t'
+		oldCols='tax_id,gid,term_id,term_type,description'
+		newCols='tax_id,gid,term_id'
+	 	filter_str='term_type in (&quot;MF&quot;)'
+	/>
+
+	<Term2Term 
+		source='go_term2term.csv'
+		typeName='GO'
+	/>          
+    <Annotation source="go_annotation.csv"  typeName='go_bp' filter_str="type in (&quot;BP&quot;)"></Annotation>
+    <Annotation source="go_annotation.csv"  typeName='go_cc' filter_str="type in (&quot;CC&quot;)"></Annotation>
+    <Annotation source="go_annotation.csv"  typeName='go_mf' filter_str="type in (&quot;MF&quot;)"></Annotation>
+    <!-- Go ENDS -->
+
+    <!-- Pubmed -->
+    <UrlDownload ds='ncbi' source= "ftp://ftp.ncbi.nih.gov/gene/DATA/gene2pubmed.gz"  />
+    <CsvConvert  
+        source="gene2pubmed.gz" 
+        dest='gene2pubmed.csv'
+        read_csv='header=None,sep=\t,skiprows=1'
+        oldCols='tax_id,gid,pubmed_id'
+        newCols='tax_id,gid,pubmed_id,pubmed_id_count'
+        group_by='group_cols:tax_id,gid;aggregate_method:pubmed_id_count|count_unique,pubmed_id|concat;'
+        >
+        <Col colName='pubmed_id_count' sourceCol = 'pubmed_id'/>
+    </CsvConvert>
+   
+    <Annotation source="gene2pubmed.csv" typeName='Pubmed'>
+        <Col colName='content' sourceCol='pubmed_id_count' required=''/>
+        <Col colName='annotation_field1' sourceCol='pubmed_id' required=''/>
+    </Annotation>
+
+    <UrlDownload ds='ncbi' source= "ftp://ftp.ncbi.nlm.nih.gov/gene/GeneRIF/generifs_basic.gz"  />
+    <CsvConvert  
+        source="generifs_basic.gz" 
+        dest='generifs_basic.csv'
+        read_csv='header=None,sep=\t,skiprows=1'
+        oldCols='tax_id,gid,pubmed_id,last_update,generif_text'
+        newCols='tax_id,gid,pubmed_id,last_update,generif_text,pubmed_id_count'
+        group_by='group_cols:tax_id,gid;aggregate_method:pubmed_id_count|count_unique,pubmed_id|concat,generif_text|concat;'
+        >
+        <Col colName='pubmed_id_count' sourceCol = 'pubmed_id'/>
+    </CsvConvert>
+    <Annotation source="generifs_basic.csv" typeName='gene_rif'>
+        <Col colName='content' sourceCol='pubmed_id_count' required=''/>
+        <Col colName='annotation_field1' sourceCol='pubmed_id' required=''/>
+    </Annotation>
+    <!-- Pubmed ENDS-->
+
+    
+    <!--OMIM-->
+  	<FileSystem ds='omim' source = "geneMap2.txt" />
+ 	<FileSystem ds='omim' source = "mim2gene.txt" />
+    <OmimDownload ds='omim'/>
+    
+    <Annotation source="omim_annotation.csv"  typeName='omim'></Annotation>
+    <!--OMIM ENDS-->
+    
+    <!--JAX-->
+    <JaxDownload ds='jax'/>
+    <Annotation source="jax_annotation.csv"  typeName='jax'></Annotation>
+    <!--JAX-->
+
+    <!-- Protein List -->
+    <ProteinListDownload ds=''/>
+    
+    <Annotation source="tissue_specificity_tiger.csv"  typeName='tissue_specificity_tiger' >
+        <Col colName='content' sourceCol='Tissues' required=''/>
+        <Col colName='gid' sourceCol = 'gene_id'/>
+        <Col colName='annotation_field1' sourceCol = 'RefSeq'/>                
+    </Annotation>
+
+    <Annotation source="target_drugbank.csv"  typeName='drug_targets_databank' >
+    </Annotation>
+
+    <Annotation source="pathogenic_lof_clinvar.csv"  typeName='pathogenic_lof_clinvar' >
+        <ColUnique colName='content' sourceCol='source_trait' required=''/>
+        <Col colName='gid' sourceCol = 'gene_id'/>
+    </Annotation>    
+    <!-- Protein List Ends-->
+
+    <!-- Uniprot -->   
+    <UniProtDownload/>
+    <MultiTypeAnnotations typeNames = 'uniprot_transmembrane,uniprot_secreted' source='uniprot.csv' name="UniprotAnnotations"/> 
+    <Annotation source="uniprot_kinase.csv" typeName='uniprot_kinase_class' ></Annotation>
+    <IdMappingUniprot
+        source="uniprot_idmapping.csv"
+        dependence="isoform_idmap.csv"
+        typeName='uniprot'
+    >
+
+    </IdMappingUniprot>
+    <!-- Uniprot ENDS-->
+       
+    <IdMappingGeneSynonyms 
+		source="gene_info.csv" 
+		dest="idmapping_gene_synonyms.csv"
+		oldCols='tax_id,gid,Symbol,LocusTag,Synonyms,map_location,description,type_of_gene,Full_name_from_nomenclature_authority,dbXrefs'
+		newCols='gid,Synonyms,tax_id'
+		read_csv = 'skiprows=1'>
+			<Col colName='Synonyms' sourceCol = 'Synonyms' match='^(?!-$)(.*)' required=''/>
+	</IdMappingGeneSynonyms>
+    <IdMapping  source="idmapping_gene_synonyms.csv"  typeName='gene_synonym' read_csv="dtype=S300"> <!-- dtype='S300' is for resolving the issue with the "NA" gene names in the file -->
+        <Col colName='source_id' sourceCol='Synonyms'  required=''/>
+    </IdMapping>
+
+    <IdMappingGeneDbXref
+		source="gene_info.csv"
+		dest="idmapping_gene_dbxref.csv"
+		oldCols='tax_id,gid,Symbol,LocusTag,Synonyms,map_location,description,type_of_gene,Full_name_from_nomenclature_authority,dbXrefs'
+		newCols='gid,dbxref,tax_id'
+		read_csv = 'skiprows=1'>
+			<Col colName='dbxref' sourceCol = 'dbXrefs' match='^(?!-$)(.*)' required=''/>
+	</IdMappingGeneDbXref>
+    <IdMapping  source="idmapping_gene_dbxref.csv"  typeName='dbxref' read_csv="dtype=S300"> <!-- dtype='S300' is for resolving the issue with the "NA" gene names in the file -->
+        <Col colName='source_id' sourceCol='dbxref'  required=''/>
+    </IdMapping>
+
+
+    <IdMapping  source="gene_info.csv"  typeName='Gene_History' destFile='Gene_History_gid_self' >
+        <Col colName='gid' sourceCol = 'gid'/>
+        <Col colName='source_id' sourceCol='gid' />
+    </IdMapping>
+       
+    <!-- Protein Atlas-->      
+    <ProteinAtlasDownload source='proteinatlas.tsv.zip' dest='protein_atlas_annotation.csv'/>
+    <MultiTypeAnnotations typeNames = 'Protein_Atlas_Function,Protein_Atlas_Plasma,Protein_Atlas_Secreted,Protein_Atlas_Membrane,Protein_Atlas_Subcellular_Location, Protein_Atlas_PROTEIN_EXPR_TISSUE,Protein_Atlas_PROTEIN_EXPR_CANCER,Protein_Atlas_RNA_tissue_category' source='protein_atlas_annotation.csv' name="ProteinAtlasAnnotations"/> 
+    <!-- Protein Atlas Ends-->
+
+    <!-- dbGAP-->      
+    <GenotypePhenotypeDownload dest='genotype_phenotype_ncbi.csv'/>
+    <MultiTypeAnnotations typeNames = 'dbGap,NHGRI_GWAS' source='genotype_phenotype_ncbi.csv' name="GenotypePhenotypeAnnotation"/>     
+    <!-- dbGAP Ends-->
+
+    <!-- ENSEMBL -->
+    <EnsemblDownload ds='ensembl' dest='ensembl_data.csv'/>   
+    <IdMapping  filter_str='type_name == "ensembl_gene_id"'
+        source="ensembl_id_map.csv" 
+        typeName='ensembl_gene_id'
+    />
+    <IdMapping  filter_str='type_name == "ensembl_peptide_id"'
+        source="ensembl_id_map.csv" 
+        typeName='ensembl_peptide_id'
+    />
+    <IdMapping  filter_str='type_name == "ensembl_transcript_id"'
+        source="ensembl_id_map.csv" 
+        typeName='ensembl_transcript_id'
+    />
+    <IdMapping  filter_str='type_name == "ucsc"'
+        source="ensembl_id_map.csv"
+        typeName='ucsc'>
+        <Col colName='source_id' sourceCol='source_id'  required=''/>
+    </IdMapping>
+
+    <MultiTypeAnnotations typeNames = 'GOA_ENSEMBL,INTERPRO_ENSEMBL,TRANSMEMBRANE_ENSEMBL,VARIATIONS_ENSEMBL,APPRIS_ENSEMBL,DDG2P,GOA,Orphanet'
+                          source='ensembl_annotations.csv'
+                          name="ensembl_annotations"
+                          ds="ensembl"/>
+    <!--
+    <MultiTypeAnnotations typeNames = 'DDG2P,GOA,Orphanet' source='ensembl_phenotype_annotations.csv' name="ensembl_phenotypes" ds="ensembl"/> 
+    <MultiTypeAnnotations typeNames = 'GOA_ENSEMBL,INTERPRO_ENSEMBL,FAMILY_ENSEMBL,TRANSMEMBRANE_ENSEMBL,VARIATIONS_ENSEMBL,APPRIS_ENSEMBL' source='ensembl_annotations.csv' name="ensembl_annotations" ds="ensembl"/>
+    -->
+    <!-- ENSEMBL ENDS-->
+
+    <!--UCSC-->
+    <UCSCDownload ds='ucsc'/>   
+    <MultiTypeAnnotations typeNames = 'genome_location' source='ucsc_annotations.csv' name="UCSCAnnotation"/>
+    <!--UCSC ENDS-->
+    
+    <!-- ISOFORM ID MAPPING-->
+    <IsoformsIdMap source="CsvInMem_gene2refseq">
+    </IsoformsIdMap>        
+    <Annotation source="isoform_idmap.csv" typeName='IsoformsIdMap'>
+    </Annotation>
+    <!-- ISOFORM ID MAPPING ENDS-->
+    <!-- ISOFORM ID MAPPING ENDS-->
+
+    <!-- BioconductorAffymetrix ID MAPPING-->
+    <BioconductorAffymetrix ds="bioconductor" dest="bioconductor_affymetrix_id.csv"/>
+    <IdMapping  source="bioconductor_affymetrix_id.csv"  typeName='bioconductor_array_id' >
+        <Col colName='gid' sourceCol = 'gene_id'/>
+        <Col colName='source_id' sourceCol='array_id' />
+        <Col colName='id_status' sourceCol='array_name' />
+    </IdMapping>
+    <!-- BioconductorAffymetrix ID MAPPING ENDS-->
+    <!-- reactome Begin-->
+    <ReactomeDownload ds='reactome'
+                  source="NCBI2Reactome_All_Levels.txt"
+                  dest='reactome_term.csv'
+    >
+    </ReactomeDownload>
+	<Term source="reactome_term.csv" typeName='Reactome Gene Sets'>
+    </Term>
+	<TermGenePair
+		source='reactome_gene_term_pair.csv'
+		typeName='Reactome Gene Sets'
+	/>
+        <!--oldCols='tax_id,gid,term_id'-->
+		<!--newCols='tax_id,gid,term_id'-->
+		<!--read_csv = 'header=None'-->
+		<!--oldCols='tax_id,gid,term_id,term_type,description'-->
+
+    <!-- reactome End-->
+
+    <!-- CORUM Begin-->
+    <CorumDownload ds='corum'
+                  source="gene_info.csv"
+                  dest='corum_term.csv'
+    >
+    </CorumDownload>
+	<Term source="corum_term.csv" typeName='CORUM'>
+    </Term>
+	<TermGenePair
+		source='corum_gene_term_pair.csv'
+		typeName='CORUM'
+	/>
+     <!--CORUM End-->
+    <!--Paper Begin-->
+    <PaperDownload ds='paper'
+                  dest='hpo_ann.csv'
+    >
+    </PaperDownload>
+    <Annotation source="hpo_ann.csv"  typeName='HPO'>
+        <Col colName='content' sourceCol='Phenotype' required=''/>
+        <Col colName='gid' sourceCol = 'Gene'/>
+    </Annotation>
+    <Annotation source="disgenet_ann.csv"  typeName='DisGeNET'>
+    </Annotation>
+
+    <Term source="trrust_term.csv" typeName='TRRUST'>
+    </Term>
+    <TermGenePair
+        source='trrust_term_pair.csv'
+        typeName='TRRUST'
+    />
+    <Term source="disgenet_term.csv" typeName='DisGeNET'>
+    </Term>
+    <TermGenePair
+        source='disgenet_term_pair.csv'
+        typeName='DisGeNET'
+    />
+    <Term source="PaGenBase_term.csv" typeName='PaGenBase'>
+    </Term>
+    <TermGenePair
+        source='PaGenBase_term_pair.csv'
+        typeName='PaGenBase'
+    />
+
+    <Term source="PaGenBase_term.csv" typeName='PaGenBase'>
+    </Term>
+    <TermGenePair
+        source='PaGenBase_term_pair.csv'
+        typeName='PaGenBase'
+    />
+    <L1000Download></L1000Download>
+    <Term source="L1000_term.csv" typeName='L1000 shRNA'>
+        <Col colName='term_name' sourceCol='term_name' match='^shRNA:(.*?)$' required=''/>
+    </Term>
+    <Term source="L1000_term.csv" typeName='L1000 Compound'>
+        <Col colName='term_name' sourceCol='term_name' match='^Cpd:(.*?)$' required=''/>
+    </Term>
+    <Term source="L1000_term.csv" typeName='L1000 Ligand'>
+        <Col colName='term_name' sourceCol='term_name' match='^Lgnd:(.*?)$' required=''/>
+    </Term>
+    <Term source="L1000_term.csv" typeName='L1000 cDNA'>
+        <Col colName='term_name' sourceCol='term_name' match='^cDNA:(.*?)$' required=''/>
+    </Term>
+    <TermGenePair source="L1000_term_pair.csv" typeName='L1000 shRNA' filter_str="type_name in(&quot;L1000 shRNA&quot;)">
+    </TermGenePair>
+    <TermGenePair source="L1000_term_pair.csv" typeName='L1000 Compound' filter_str="type_name in(&quot;L1000 Compound&quot;)">
+    </TermGenePair>
+    <TermGenePair source="L1000_term_pair.csv" typeName='L1000 Ligand' filter_str="type_name in(&quot;L1000 Ligand&quot;)">
+    </TermGenePair>
+    <TermGenePair source="L1000_term_pair.csv" typeName='L1000 cDNA' filter_str="type_name in(&quot;L1000 cDNA&quot;)">
+    </TermGenePair>
+
+    <!--Paper End-->
+
+
+
+	<Main>
+        <Upload table="gid2source_id" cols='gid,id_type_id,source_id,id_status,ds,tax_id'/>
+		<Upload table="homologene" cols='tax_id,homologene_id,gid'/>
+        <Upload table="annotation" cols='gid,annotation_type_id,content,annotation_field1,ds,tax_id'/>
+		<Upload table="term" cols='term_id,term_source_id,term_name,term_category_id,description,term_field1,term_field2'/>
+		<Upload table="term2term" cols='term_id,parent_term_id,distance,term_category_id'/>
+		<Upload table="gid2terms" cols='gid,term_ids,id_count,ds,tax_id,term_category_id'/>
+        <Upload table="term2gids" cols='term_id,gids,id_count,ds,tax_id,term_category_id'/>
+        <Upload table="interaction" cols='ds,gid_A,gid_B,interaction_category,interaction_categy,interaction_type,interaction_type_id,score,support,tax_id_A,tax_id_B'/>
+	</Main>
+	
+</ConfigRoot>
+
