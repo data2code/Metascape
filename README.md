@@ -1,6 +1,10 @@
 # Metascape
 Metascape Code Repository.
 
+For the latest version of the code, please see: https://github.com/data2code/msbio/
+
+# old instructions
+
 The example script below relies on a backend MySQL database to run.
 
 ```
